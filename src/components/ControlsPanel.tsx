@@ -1,79 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
-import { CategoryInput } from "./CategoryInput";
+import { CategoryInput } from "./CategoryList/CategoryInput";
 import { CsvUpload } from "./CsvUpload";
 import { aggregate } from "../utils/aggregate";
 import type { Category } from "../pages/MainView";
 import { Subheading } from "./Controls/Subheading";
-import { readFileAsText } from "../utils/readFileAsText";
-import { parseCsv } from "../utils/parseCsv";
-import { parseMonzoCsv } from "../utils/parseMonzoCsv";
 import type { Transaction } from "../utils/types";
 import { DatePicker } from "./Controls/DatePicker";
+import { useTransactions } from "../hooks/useTransactions";
 
 export const ControlsPanel: React.FC<{
   setRenderedCategories: (categories: Category[]) => void;
 }> = ({ setRenderedCategories }) => {
   const [file, setFile] = useState<File | null>(null);
+  const tx = useTransactions(file); // source of truth derived from file
 
-  const [tx, setTx] = useState<Transaction[]>([]); // source of truth derived from file
-  const [txById, setTxById] = useState<Transaction[]>([]);
+  const [txByDate, setTxByDate] = useState<Transaction[]>([]);
+  const [dates, setDates] = useState({
+    start: null as string | null,
+    end: null as string | null,
+    min: null as string | null,
+    max: null as string | null,
+  });
+
+  // Set min/max dates when transactions change
+  useEffect(() => {
+    if (!tx.length) return;
+
+    const times = tx.map((t) => t.date.getTime());
+    const minDate = new Date(Math.min(...times)).toISOString().slice(0, 10);
+    const maxDate = new Date(Math.max(...times)).toISOString().slice(0, 10);
+
+    setDates({ start: minDate, end: maxDate, min: minDate, max: maxDate });
+  }, [tx]);
+
+  const resetDates = () =>
+    setDates((d) => ({ ...d, start: d.min, end: d.max }));
 
   useEffect(() => {
-    if (!file) return;
+    if (!dates.start || !dates.end) return;
 
-    const updateTransactions = async () => {
-      const text = await readFileAsText(file!);
-      const rows = parseCsv(text);
-      const transactions = parseMonzoCsv(rows);
-      setTx(transactions);
+    const startTs = new Date(dates.start).getTime();
+    const endTs = new Date(dates.end).getTime();
 
-      // get min and max dates
-      const minTx = transactions.reduce(
-        (p, c) => (c.date.getTime() < p.date.getTime() ? c : p),
-        transactions[0],
-      );
-
-      const maxTx = transactions.reduce(
-        (p, c) => (c.date.getTime() > p.date.getTime() ? c : p),
-        transactions[0],
-      );
-
-      setStartDate(minTx.date.toISOString().slice(0, 10));
-      setEndDate(maxTx.date.toISOString().slice(0, 10));
-    };
-
-    updateTransactions();
-  }, [file]);
-
-  const [startDate, setStartDate] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!startDate || !endDate) return;
-
-    const startTs = new Date(startDate).getTime();
-    const endTs = new Date(endDate).getTime();
-
-    const txById = tx.filter((tx) => {
+    const txByDate = tx.filter((tx) => {
       const ts = tx.date.getTime();
       return ts >= startTs && ts <= endTs;
     });
 
-    setTxById(txById);
-  }, [tx, startDate, endDate]);
+    setTxByDate(txByDate);
+  }, [tx, dates]);
 
   /** Derived from transactions that fall within start and end dates */
   const categories = useMemo(
     () =>
-      aggregate(txById).map(({ category, amount, count }) => ({
+      aggregate(txByDate).map(({ category, amount, count }) => ({
         title: category,
         numCount: count,
         total: Math.abs(amount),
       })),
-    [txById],
+    [txByDate],
   );
 
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+
+  const categorySet = useMemo(
+    () => new Set(filteredCategories.map((c) => c.title)),
+    [filteredCategories],
+  );
 
   // check all categories if all categories changes e.g. new file upload
   useEffect(() => setFilteredCategories(categories), [categories]);
@@ -82,17 +75,15 @@ export const ControlsPanel: React.FC<{
 
   const onToggle = (title: string, isChecked: boolean) => {
     if (isChecked) {
-      // Keeps position in list consistent when toggling category
-      const selectedCategories = categories.filter(
-        (c1) =>
-          filteredCategories.find((c2) => c1.title === c2.title) ||
-          c1.title === title,
-      );
-      setFilteredCategories(selectedCategories);
-      return;
+      // Maintain order from `categories`
+      setFilteredCategories(() => [
+        ...categories.filter(
+          (c) => c.title === title || categorySet.has(c.title),
+        ),
+      ]);
+    } else {
+      setFilteredCategories((prev) => prev.filter((c) => c.title !== title));
     }
-
-    setFilteredCategories((prev) => prev.filter((c) => c.title !== title));
   };
 
   // Update reciept preview
@@ -115,60 +106,71 @@ export const ControlsPanel: React.FC<{
           {/* Upload Section */}
           <CsvUpload onUpload={setFile} />
 
-          {/* Filters Section */}
-          {categories.length > 0 && (
-            <>
-              {/* Start and End Date Pickers */}
-              {startDate !== null && endDate !== null && (
-                <section>
-                  <Subheading text="Time Period" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <DatePicker
-                      label="Start Date"
-                      date={startDate}
-                      setDate={setStartDate}
-                    />
-                    <DatePicker
-                      label="End Date"
-                      date={endDate}
-                      setDate={setEndDate}
-                    />
-                  </div>
-                </section>
-              )}
-
-              {/* Category List */}
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <Subheading text="Filter Categories" />
+          {/* Start and End Date Pickers */}
+          {tx.length > 0 && dates.start !== null && dates.end !== null && (
+            <section>
+              <Subheading
+                text="Time Period"
+                action={
                   <button
                     type="button"
                     className="text-xs text-primary font-bold hover:underline"
+                    onClick={resetDates}
+                  >
+                    Reset
+                  </button>
+                }
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <DatePicker
+                  label="Start Date"
+                  date={dates.start}
+                  setDate={(start) => setDates((d) => ({ ...d, start }))}
+                  min={dates.min!}
+                  max={dates.end}
+                />
+                <DatePicker
+                  label="End Date"
+                  date={dates.end}
+                  setDate={(end) => setDates((d) => ({ ...d, end }))}
+                  max={dates.max!}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Filters Section */}
+          {categories.length > 0 && (
+            <section>
+              <Subheading
+                text="Filter Categories"
+                action={
+                  <button
+                    type="button"
+                    className="text-xs text-primary font-semibold hover:underline"
                     onClick={selectAll}
                   >
                     Select All
                   </button>
-                </div>
+                }
+              />
 
-                <div className="space-y-1 bg-primary/5 rounded-xl p-2">
-                  {/* Category Item */}
-                  {categories.map(({ title, numCount, total }) => (
-                    <CategoryInput
-                      key={title}
-                      title={title}
-                      total={total}
-                      numItems={numCount}
-                      isChecked={Boolean(
-                        filteredCategories.find((c) => c.title === title),
-                      )}
-                      setIsChecked={(isChecked) => {
-                        onToggle(title, isChecked);
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-            </>
+              <div className="space-y-1 bg-primary/5 rounded-xl p-2">
+                {/* Category Item */}
+                {categories.map(({ title, numCount, total }) => (
+                  <CategoryInput
+                    key={title}
+                    title={title}
+                    total={total}
+                    numItems={numCount}
+                    isChecked={categorySet.has(title)}
+                    setIsChecked={(isChecked) => {
+                      onToggle(title, isChecked);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </div>

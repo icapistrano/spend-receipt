@@ -13,10 +13,13 @@ export const ReceiptPreview: React.FC<{
         {/* Receipt Header */}
         <div className="text-center space-y-2 border-b-2 border-dashed border-gray-300 pb-6">
           <p className="text-xl font-bold uppercase tracking-wider font-ui">
-            Where your money went
+            Spend Receipt
+          </p>
+          <p className="text-xs text-gray-400">
+            Your categorised spending, on a single receipt
           </p>
           <div>
-            <p className="text-xs text-gray-400">SPENDING SUMMARY</p>
+            {/* <p className="text-xs text-gray-400">SPENDING SUMMARY</p> */}
             <p className="text-xs text-gray-400">OCT 01 - OCT 31</p>
           </div>
         </div>
@@ -24,10 +27,13 @@ export const ReceiptPreview: React.FC<{
         {/* Receipt Content */}
         <div className="py-4 space-y-3 text-sm">
           {categories.map(({ title, numCount, total }) => (
-            <div key={title} className="flex justify-start gap-1">
-              <span className="font-bold">{title}</span>
-              <span className="text-gray-500">({numCount}x)</span>
-              <span className="font-bold ml-auto">{total}</span>
+            <div
+              key={title}
+              className="flex items-center justify-start gap-1 tracking-widest"
+            >
+              <span>{title}</span>
+              <span className="text-gray-500 text-xs">({numCount}x)</span>
+              <span className="ml-auto">{total}</span>
             </div>
           ))}
         </div>
