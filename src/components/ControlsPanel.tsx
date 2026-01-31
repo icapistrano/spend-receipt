@@ -15,36 +15,8 @@ export const ControlsPanel: React.FC<{
 }> = ({ setRenderedCategories }) => {
   const [file, setFile] = useState<File | null>(null);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]); // source of truth
-  const [filteredTransactions, setFilteredTransactions] = useState<
-    Transaction[]
-  >([]);
-
-  const [categories, setCategories] = useState<Category[]>([]); // source of truth
-
-  const filteredCategories = useMemo(() => {
-    const selectedCategories = new Set(
-      filteredTransactions.map((t) => t.category),
-    );
-
-    return categories.filter((c) => selectedCategories.has(c.title));
-  }, [filteredTransactions]);
-
-  const selectAll = () => {
-    setFilteredTransactions(transactions);
-  };
-
-  const onToggle = (title: string, isChecked: boolean) => {
-    if (isChecked) {
-      const selectedTransactions = transactions.filter(
-        (t) => t.category === title,
-      );
-      setFilteredTransactions((prev) => [...prev, ...selectedTransactions]);
-      return;
-    }
-
-    setFilteredTransactions((prev) => prev.filter((t) => t.category !== title));
-  };
+  const [tx, setTx] = useState<Transaction[]>([]); // source of truth derived from file
+  const [txById, setTxById] = useState<Transaction[]>([]);
 
   useEffect(() => {
     if (!file) return;
@@ -53,56 +25,75 @@ export const ControlsPanel: React.FC<{
       const text = await readFileAsText(file!);
       const rows = parseCsv(text);
       const transactions = parseMonzoCsv(rows);
-      setTransactions(transactions);
-      setFilteredTransactions(transactions);
+      setTx(transactions);
 
       // get min and max dates
-      const minTx = transactions.reduce((p, c) => {
-        return c.date.getTime() < p.date.getTime() ? c : p;
-      }, transactions[0]);
+      const minTx = transactions.reduce(
+        (p, c) => (c.date.getTime() < p.date.getTime() ? c : p),
+        transactions[0],
+      );
 
-      const maxTx = transactions.reduce((p, c) => {
-        return c.date.getTime() > p.date.getTime() ? c : p;
-      }, transactions[0]);
+      const maxTx = transactions.reduce(
+        (p, c) => (c.date.getTime() > p.date.getTime() ? c : p),
+        transactions[0],
+      );
 
       setStartDate(minTx.date.toISOString().slice(0, 10));
       setEndDate(maxTx.date.toISOString().slice(0, 10));
-
-      console.log(minTx.date.toISOString().slice(0, 10));
-
-      const categories = aggregate(transactions).map(
-        ({ category, amount, count }) => ({
-          title: category,
-          numCount: count,
-          total: Math.abs(amount),
-          isChecked: true,
-        }),
-      );
-
-      setCategories(categories);
     };
 
     updateTransactions();
   }, [file]);
 
-  const [startDate, setStartDate] = useState("2024-01-01");
-  const [endDate, setEndDate] = useState("2024-01-31");
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
 
-  // agreggate here for pickers
   useEffect(() => {
-    const _startDate = new Date(startDate);
-    const _endDate = new Date(endDate);
+    if (!startDate || !endDate) return;
 
-    const startTs = _startDate.getTime();
-    const endTs = _endDate.getTime();
+    const startTs = new Date(startDate).getTime();
+    const endTs = new Date(endDate).getTime();
 
-    const filteredTransactions = transactions.filter((tx) => {
+    const txById = tx.filter((tx) => {
       const ts = tx.date.getTime();
       return ts >= startTs && ts <= endTs;
     });
 
-    setFilteredTransactions(filteredTransactions);
-  }, [transactions, startDate, endDate]);
+    setTxById(txById);
+  }, [tx, startDate, endDate]);
+
+  /** Derived from transactions that fall within start and end dates */
+  const categories = useMemo(
+    () =>
+      aggregate(txById).map(({ category, amount, count }) => ({
+        title: category,
+        numCount: count,
+        total: Math.abs(amount),
+      })),
+    [txById],
+  );
+
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+
+  // check all categories if all categories changes e.g. new file upload
+  useEffect(() => setFilteredCategories(categories), [categories]);
+
+  const selectAll = () => setFilteredCategories(categories);
+
+  const onToggle = (title: string, isChecked: boolean) => {
+    if (isChecked) {
+      // Keeps position in list consistent when toggling category
+      const selectedCategories = categories.filter(
+        (c1) =>
+          filteredCategories.find((c2) => c1.title === c2.title) ||
+          c1.title === title,
+      );
+      setFilteredCategories(selectedCategories);
+      return;
+    }
+
+    setFilteredCategories((prev) => prev.filter((c) => c.title !== title));
+  };
 
   // Update reciept preview
   useEffect(() => {
@@ -128,21 +119,23 @@ export const ControlsPanel: React.FC<{
           {categories.length > 0 && (
             <>
               {/* Start and End Date Pickers */}
-              <section>
-                <Subheading text="Time Period" />
-                <div className="grid grid-cols-2 gap-4">
-                  <DatePicker
-                    label="Start Date"
-                    date={startDate}
-                    setDate={setStartDate}
-                  />
-                  <DatePicker
-                    label="End Date"
-                    date={endDate}
-                    setDate={setEndDate}
-                  />
-                </div>
-              </section>
+              {startDate !== null && endDate !== null && (
+                <section>
+                  <Subheading text="Time Period" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <DatePicker
+                      label="Start Date"
+                      date={startDate}
+                      setDate={setStartDate}
+                    />
+                    <DatePicker
+                      label="End Date"
+                      date={endDate}
+                      setDate={setEndDate}
+                    />
+                  </div>
+                </section>
+              )}
 
               {/* Category List */}
               <section>

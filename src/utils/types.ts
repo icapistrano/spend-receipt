@@ -9,3 +9,8 @@ export type CategoryTransaction = {
   amount: number;
   count: number;
 };
+
+export type Dates = {
+  startDate: string;
+  endDate: string;
+};

@@ -6,7 +6,6 @@ export type Category = {
   title: string;
   numCount: number;
   total: number;
-  isChecked: boolean;
 };
 
 export const MainView = () => {
