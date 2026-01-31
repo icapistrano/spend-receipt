@@ -1,0 +1,24 @@
+@font-face {
+  font-family: "Noto Sans";
+  src: url("/fonts/Noto_Sans/NotoSans-VariableFont_wdth,wght.ttf")
+    format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bit";
+  src: url("/fonts/Source_Sans_3/SourceSans3-VariableFont_wght.ttf")
+    format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+}
+
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #f42547;
+  --font-ui: "Noto Sans", system-ui, sans-serif;
+}
