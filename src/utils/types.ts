@@ -14,3 +14,9 @@ export type Dates = {
   startDate: string;
   endDate: string;
 };
+
+export type DropdownCategory =
+  | "Alphabetical"
+  | "Category Count"
+  | "Price Ascending"
+  | "Price Descending";

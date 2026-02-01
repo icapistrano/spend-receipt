@@ -8,13 +8,21 @@ export type Category = {
   total: number;
 };
 
+export type Metadata = {
+  categories: Category[];
+  dates: { start: string; end: string };
+};
+
 export const MainView = () => {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [metadata, setMetadata] = useState<Metadata>({
+    categories: [],
+    dates: { start: "", end: "" },
+  });
 
   return (
     <main className="flex items-center justify-center h-full">
-      <ReceiptPreview categories={categories} />
-      <ControlsPanel setRenderedCategories={setCategories} />
+      <ReceiptPreview metadata={metadata} />
+      <ControlsPanel setMetadata={setMetadata} />
     </main>
   );
 };

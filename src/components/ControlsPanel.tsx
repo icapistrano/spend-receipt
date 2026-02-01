@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { CategoryInput } from "./CategoryList/CategoryInput";
 import { CsvUpload } from "./CsvUpload";
 import { aggregate } from "../utils/aggregate";
-import type { Category } from "../pages/MainView";
+import type { Category, Metadata } from "../pages/MainView";
 import { Subheading } from "./Controls/Subheading";
-import type { Transaction } from "../utils/types";
+import type { DropdownCategory, Transaction } from "../utils/types";
 import { DatePicker } from "./Controls/DatePicker";
 import { useTransactions } from "../hooks/useTransactions";
+import { Dropdown } from "./CategoryList/Dropdown";
+import { dropdownFns } from "../utils/dropdownFunctions";
 
 export const ControlsPanel: React.FC<{
-  setRenderedCategories: (categories: Category[]) => void;
-}> = ({ setRenderedCategories }) => {
+  setMetadata: (data: Metadata) => void;
+}> = ({ setMetadata }) => {
   const [file, setFile] = useState<File | null>(null);
   const tx = useTransactions(file); // source of truth derived from file
 
@@ -50,16 +52,21 @@ export const ControlsPanel: React.FC<{
     setTxByDate(txByDate);
   }, [tx, dates]);
 
+  const [sortedOption, setSortedOption] =
+    useState<DropdownCategory>("Alphabetical");
+
   /** Derived from transactions that fall within start and end dates */
-  const categories = useMemo(
-    () =>
-      aggregate(txByDate).map(({ category, amount, count }) => ({
+  const categories = useMemo(() => {
+    const mappedCategories: Category[] = aggregate(txByDate).map(
+      ({ category, amount, count }) => ({
         title: category,
         numCount: count,
         total: Math.abs(amount),
-      })),
-    [txByDate],
-  );
+      }),
+    );
+
+    return mappedCategories.sort(dropdownFns[sortedOption]);
+  }, [txByDate, sortedOption]);
 
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
 
@@ -88,8 +95,20 @@ export const ControlsPanel: React.FC<{
 
   // Update reciept preview
   useEffect(() => {
-    setRenderedCategories(filteredCategories);
-  }, [filteredCategories]);
+    const formatDate = (dateAsString: string) => {
+      const date = new Date(dateAsString);
+
+      return date.toDateString();
+    };
+
+    setMetadata({
+      categories: filteredCategories,
+      dates: {
+        start: formatDate(dates.start!),
+        end: formatDate(dates.end!),
+      },
+    });
+  }, [filteredCategories, dates]);
 
   return (
     <aside className="w-full h-full lg:w-[480px] flex flex-col border-l border-[#e8ced3]">
@@ -145,13 +164,25 @@ export const ControlsPanel: React.FC<{
               <Subheading
                 text="Filter Categories"
                 action={
-                  <button
-                    type="button"
-                    className="text-xs text-primary font-semibold hover:underline"
-                    onClick={selectAll}
-                  >
-                    Select All
-                  </button>
+                  <div className="flex gap-2 items-center">
+                    <Dropdown
+                      options={[
+                        "Alphabetical",
+                        "Category Count",
+                        "Price Ascending",
+                        "Price Descending",
+                      ]}
+                      onChange={(e) => setSortedOption(e as DropdownCategory)}
+                    />
+                    <span className="text-gray-300">|</span>
+                    <button
+                      type="button"
+                      className="text-xs text-primary font-semibold hover:underline"
+                      onClick={selectAll}
+                    >
+                      Select All
+                    </button>
+                  </div>
                 }
               />
 
@@ -164,9 +195,7 @@ export const ControlsPanel: React.FC<{
                     total={total}
                     numItems={numCount}
                     isChecked={categorySet.has(title)}
-                    setIsChecked={(isChecked) => {
-                      onToggle(title, isChecked);
-                    }}
+                    setIsChecked={(isChecked) => onToggle(title, isChecked)}
                   />
                 ))}
               </div>

@@ -28,7 +28,8 @@ export function parseMonzoCsv(rows: string[][]): Transaction[] {
         date: parseMonzoDate(date),
       } as Transaction;
     })
-    .filter((tx): tx is Transaction => tx !== null);
+    .filter((tx) => tx !== null)
+    .filter((tx) => tx.amount !== 0); // Handle pending authorization
 }
 
 function parseMonzoDate(dateStr: string): Date {
